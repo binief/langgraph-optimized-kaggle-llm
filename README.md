@@ -1,24 +1,27 @@
 # LangGraph-Optimized Kaggle LLM Gateway
 
-Run **`Qwen3.8-27B`** on Kaggle (`GPU T4 x2`) using **prebuilt `llama.cpp`** (`llama-server`) paired with a **LangGraph + FastAPI** orchestration gateway designed for **VS Code coding agents** (Cline, Roo Code, Continue, Kilo Code, OpenCode) and OpenAI-compatible clients.
+Run **`Qwen3.8-27B`** on Kaggle (`GPU T4 x2`) using prebuilt **`llama.cpp`** (`llama-server`) paired with a **LangGraph + FastAPI** orchestration gateway for VS Code coding agents (Cline, Roo Code, Continue, Kilo Code, OpenCode) and OpenAI-compatible clients.
 
-## Notebooks Included
-- **`qwen38_27b_vscode_langgraph_kaggle.ipynb`** *(Recommended)* — Dual-model VS Code coding gateway:
-  - **Solver (`:8000` on GPU):** `Qwen3.8-27B-UD-IQ4_XS` (`32K` ctx, `-np 1`, `--cache-type-k/v q8_0`, `-fa on`, `--jinja`).
-  - **Compactor / Router (`:8001` on GPU 1 / CPU):** `Qwen3-1.7B-Q8_0` (`8K` ctx).
-  - **LangGraph Gateway (`:8080`):**
-    - Smart tool-output pruning (keeps head/tail + error lines on older tool outputs).
-    - Background async pre-compaction (`60%` soft watermark -> `75%` hard watermark -> `40%` tail) with SQLite summary caching.
-    - Deterministic File & Error Ledger pinned alongside summaries.
-    - Stuck tool-loop breaker & error-aware dynamic sampling (`temperature` + `enable_thinking`).
-    - Real-time intra-stream **thinking-loop detector** with automatic `enable_thinking=False` recovery.
-    - Lightweight request offloading (title/summary requests -> `:8001`), SSE keepalives, and `/metrics`.
-- **`qwen38_27b_langgraph_kaggle.ipynb`** — Multi-step LangGraph tool-calling demo with mock REST APIs.
-- **`qwen38_27b_kaggle_openai.ipynb`** — Minimal prebuilt `llama.cpp` server for `Qwen3.8-27B` with Cloudflare Tunnel.
-- **`ligguf_kaggle_openai.ipynb`** — Lightweight CPU-only `LiGGUF` server for smaller LLaMA/Qwen3 GGUF models.
+## Notebooks
+- **`qwen38_27b_vscode_gateway.ipynb`** *(Recommended / latest)* — Dual-model VS Code coding gateway:
+  - **Solver (`:8000` on GPU):** `Qwen3.8-27B-UD-IQ4_XS` (`32K` context, `-np 1`, quantized KV cache, Flash Attention, Jinja).
+  - **Compactor / Router (`:8001` on GPU 1 or CPU):** `Qwen3-1.7B-Q8_0` (`8K` context).
+  - **LangGraph Gateway (`:8080`):** tool-output pruning, async context compaction with SQLite summary caching, a file/error ledger, loop detection, lightweight request offloading, SSE keepalives, and `/metrics`.
+- **`qwen38_27b_langgraph_demo.ipynb`** — Multi-step LangGraph tool-calling demo with mock REST APIs.
+- **`qwen38_27b_openai_server.ipynb`** — Minimal prebuilt `llama.cpp` server for `Qwen3.8-27B` with Cloudflare Tunnel.
+- **`ligguf_openai_server.ipynb`** — Lightweight CPU-only LiGGUF server for smaller LLaMA/Qwen3 GGUF models.
+
+## Python scripts
+Application code is kept in the repository's `scripts/` directory rather than embedded in notebook cells:
+
+- `scripts/langgraph_vscode_gateway.py` — recommended VS Code-agent gateway.
+- `scripts/langgraph_gateway.py` and `scripts/mock_api.py` — multi-step LangGraph demo.
+- `scripts/ligguf_server.py` — LiGGUF OpenAI-compatible API server.
+
+The notebooks that use these scripts clone this repository into `/kaggle/working/langgraph-optimized-kaggle-llm` and launch the scripts from that checkout. Keep **Internet: ON** in Kaggle so cloning the repository and downloading the model/dependencies work.
 
 ## Quick Start (Kaggle)
-1. Import `qwen38_27b_vscode_langgraph_kaggle.ipynb` into Kaggle.
+1. Import `qwen38_27b_vscode_gateway.ipynb` into Kaggle.
 2. Enable **Accelerator: GPU T4 x2** and **Internet: ON**.
 3. Run all cells top to bottom.
 4. Copy the `https://*.trycloudflare.com` URL printed in Section 7 and set your VS Code agent to:
