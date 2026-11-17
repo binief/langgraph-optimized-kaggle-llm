@@ -12,6 +12,8 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Set
 from typing_extensions import TypedDict
 
+from message_normalization import merge_system_messages
+
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -210,7 +212,7 @@ def normalize_payload(body: Dict[str, Any]) -> Dict[str, Any]:
         if "content" in m2:
             m2["content"] = normalize_content(m2["content"])
         msgs.append(m2)
-    p["messages"] = msgs
+    p["messages"] = merge_system_messages(msgs)
 
     if "max_completion_tokens" in p and "max_tokens" not in p:
         p["max_tokens"] = p.pop("max_completion_tokens")
@@ -394,7 +396,7 @@ async def compact_context_node(state: GatewayState) -> dict:
     content_blocks.append(f"## Summary\n{summary}")
 
     summary_msg = {"role": "system", "content": "\n\n".join(content_blocks)}
-    payload["messages"] = head + [summary_msg] + kept_tail
+    payload["messages"] = merge_system_messages(head + [summary_msg] + kept_tail)
     return {"payload": payload, "compacted": True, "precompact_started": False}
 
 
@@ -441,7 +443,7 @@ def analyze_and_route_node(state: GatewayState) -> dict:
     if hints:
         insert_at = 1 if msgs and msgs[0].get("role") == "system" else 0
         msgs.insert(insert_at, {"role": "system", "content": "[LangGraph Guard] " + " ".join(hints)})
-        payload["messages"] = msgs
+    payload["messages"] = merge_system_messages(msgs)
 
     kwargs = dict(payload.get("chat_template_kwargs") or {})
     if "enable_thinking" not in kwargs:
