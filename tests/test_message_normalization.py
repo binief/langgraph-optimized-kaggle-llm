@@ -1,9 +1,23 @@
 import unittest
 
-from scripts.message_normalization import merge_system_messages
+from scripts.message_normalization import keep_latest_user_in_tail, merge_system_messages
 
 
 class MergeSystemMessagesTests(unittest.TestCase):
+    def test_latest_user_message_is_kept_in_compacted_tail(self):
+        messages = [
+            {"role": "assistant", "content": "old response"},
+            {"role": "user", "content": "latest request"},
+            {"role": "assistant", "content": "tool call"},
+            {"role": "tool", "content": "tool result"},
+        ]
+
+        older, tail = keep_latest_user_in_tail(messages, split_index=3)
+
+        self.assertEqual(older, messages[:1])
+        self.assertEqual(tail, messages[1:])
+        self.assertEqual(tail[0]["role"], "user")
+
     def test_moves_and_merges_system_messages_without_reordering_conversation(self):
         messages = [
             {"role": "user", "content": "question"},
