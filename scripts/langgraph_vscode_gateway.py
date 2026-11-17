@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Set
 from typing_extensions import TypedDict
 
+from compaction_watermarks import calculate_watermark_chars
 from message_normalization import keep_latest_user_in_tail, merge_system_messages
 
 import httpx
@@ -22,10 +23,34 @@ from langgraph.graph import END, START, StateGraph
 SOLVER_BASE = os.environ.get("SOLVER_BASE", "http://127.0.0.1:8000/v1")
 COMPACTOR_BASE = os.environ.get("COMPACTOR_BASE", "http://127.0.0.1:8001/v1")
 
-# Watermarks for 32K-token context (~3.5-4 chars/tok)
-SOFT_WATERMARK_CHARS = int(os.environ.get("SOFT_WATERMARK_CHARS", "72000"))   # ~60%: background pre-compaction
-HIGH_WATERMARK_CHARS = int(os.environ.get("HIGH_WATERMARK_CHARS", "92000"))   # ~75%: apply compaction
-LOW_WATERMARK_CHARS = int(os.environ.get("LOW_WATERMARK_CHARS", "48000"))     # ~40%: target tail size
+# Derive character watermarks from the solver's configured context. These are
+# estimates (3.75 chars/token by default); explicit *_WATERMARK_CHARS env vars
+# remain available for deployment-specific overrides.
+SOLVER_CONTEXT_TOKENS = int(os.environ.get("SOLVER_CTX", "32768"))
+CHARS_PER_TOKEN = float(os.environ.get("CHARS_PER_TOKEN", "3.75"))
+WATERMARK_RATIOS = {
+    "soft": float(os.environ.get("SOFT_WATERMARK_RATIO", "0.60")),
+    "high": float(os.environ.get("HIGH_WATERMARK_RATIO", "0.75")),
+    "low": float(os.environ.get("LOW_WATERMARK_RATIO", "0.40")),
+}
+_DEFAULT_WATERMARKS = calculate_watermark_chars(
+    SOLVER_CONTEXT_TOKENS,
+    chars_per_token=CHARS_PER_TOKEN,
+    soft_ratio=WATERMARK_RATIOS["soft"],
+    high_ratio=WATERMARK_RATIOS["high"],
+    low_ratio=WATERMARK_RATIOS["low"],
+)
+SOFT_WATERMARK_CHARS = int(os.environ.get("SOFT_WATERMARK_CHARS", _DEFAULT_WATERMARKS["soft"]))
+HIGH_WATERMARK_CHARS = int(os.environ.get("HIGH_WATERMARK_CHARS", _DEFAULT_WATERMARKS["high"]))
+LOW_WATERMARK_CHARS = int(os.environ.get("LOW_WATERMARK_CHARS", _DEFAULT_WATERMARKS["low"]))
+if not 0 < LOW_WATERMARK_CHARS < SOFT_WATERMARK_CHARS < HIGH_WATERMARK_CHARS:
+    raise ValueError("Watermark character limits must satisfy 0 < low < soft < high")
+print(
+    f"[LangGraph] context={SOLVER_CONTEXT_TOKENS} tokens; "
+    f"compaction chars: soft={SOFT_WATERMARK_CHARS}, "
+    f"hard={HIGH_WATERMARK_CHARS}, target={LOW_WATERMARK_CHARS}",
+    flush=True,
+)
 MAX_THINK_CHARS = int(os.environ.get("MAX_THINK_CHARS", "12000"))
 DYNAMIC_SAMPLING = os.environ.get("DYNAMIC_SAMPLING", "1") == "1"
 CACHE_DB_PATH = os.environ.get("CACHE_DB_PATH", "/tmp/compaction_cache.db")
