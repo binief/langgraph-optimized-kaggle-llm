@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, List, Optional, Set
 from typing_extensions import TypedDict
 
-from message_normalization import merge_system_messages
+from message_normalization import keep_latest_user_in_tail, merge_system_messages
 
 import httpx
 from fastapi import FastAPI, Request
@@ -350,7 +350,10 @@ def split_head_older_tail(msgs: List[Dict[str, Any]]):
         split_idx -= 1
         kept_tail.insert(0, body[split_idx])
 
-    return head, body[:split_idx], kept_tail
+    # A Qwen Jinja prompt must contain a user query. Keep the latest user turn
+    # in the live tail instead of reducing every user message to system summary.
+    older, kept_tail = keep_latest_user_in_tail(body, split_idx)
+    return head, older, kept_tail
 
 
 # Node 2: Soft Background Pre-Compaction (60%) + Hard Watermark Compaction (75%) + Ledger
@@ -591,6 +594,11 @@ async def chat_completions(request: Request):
     METRICS["requests_total"] += 1
     raw_body = await request.json()
     body = normalize_payload(raw_body)
+    if not any(m.get("role") == "user" for m in body.get("messages", [])):
+        return JSONResponse(
+            status_code=400,
+            content={"error": {"message": "At least one user message is required."}},
+        )
     stream = bool(body.get("stream", False))
 
     # Fast-path offload lightweight title/commit/summary requests to :8001 so 27B slot stays free

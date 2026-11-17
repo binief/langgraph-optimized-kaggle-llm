@@ -4,6 +4,19 @@ import json
 from typing import Any, Dict, List
 
 
+def keep_latest_user_in_tail(
+    messages: List[Dict[str, Any]], split_index: int
+) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Return older/tail segments while keeping the latest user turn in tail."""
+    latest_user_index = max(
+        (index for index, message in enumerate(messages) if message.get("role") == "user"),
+        default=None,
+    )
+    if latest_user_index is not None and split_index > latest_user_index:
+        split_index = latest_user_index
+    return messages[:split_index], messages[split_index:]
+
+
 def merge_system_messages(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Move system messages to the front and combine them into one message.
 
